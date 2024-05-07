@@ -1,6 +1,6 @@
-import conn from "@/app/lib/db";
-import dbString from "@/app/lib/dbString";
-import { makeResponse, makeStatusResponse } from "@/app/lib/response";
+import conn from "@/app/lib/db/db";
+import dbString from "@/app/lib/db/dbString";
+import { makeResponse, makeStatusResponse } from "@/app/lib/db/response";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 

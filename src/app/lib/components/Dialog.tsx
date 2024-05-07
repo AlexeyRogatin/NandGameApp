@@ -5,17 +5,17 @@ import Modal from 'react-modal';
 
 interface HintDialogProps {
   isOpen: boolean;
-  text: string;
+  children: React.ReactNode;
   buttonText: string;
   onClose: () => void;
 }
 
-export default function Dialog({ isOpen, text, buttonText, onClose }: HintDialogProps) {
+export default function Dialog({ isOpen, children, buttonText, onClose }: HintDialogProps) {
     return (
-        <Modal isOpen={isOpen} onRequestClose={onClose} contentLabel="Hint"
+        <Modal isOpen={isOpen} onRequestClose={onClose} ariaHideApp={false} contentLabel="Hint"
             className="bordered modal-content" overlayClassName="modal-overlay">
                 <div className='flex flex-col gap-30'>
-                    <div>{text}</div>
+                    <div className='flex flex-col gap-10'>{children}</div>
                     <button className="bordered" onClick={onClose}>{buttonText}</button>
                 </div>
         </Modal>

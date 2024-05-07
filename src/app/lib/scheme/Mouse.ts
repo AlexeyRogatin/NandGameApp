@@ -24,6 +24,8 @@ export default class Mouse {
         this.wentDown = false;
         this.wentUp = false;
 
+        canvas.onmousedown = (e: MouseEvent) => e.preventDefault();
+
         document.onmousemove = (e: MouseEvent) => {
             let rect = canvas.getBoundingClientRect();
             this.x = (e.clientX - rect.left) / rect.width * canvas.width;

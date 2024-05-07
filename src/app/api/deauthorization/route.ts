@@ -1,4 +1,4 @@
-import { makeResponse, makeStatusResponse } from "@/app/lib/response";
+import { makeResponse, makeStatusResponse } from "@/app/lib/db/response";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 

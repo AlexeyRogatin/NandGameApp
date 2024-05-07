@@ -13,7 +13,7 @@ export default function Authorization({children}: {children: React.ReactNode;}) 
                             comparing your result to the results of others.
                         </p> 
                         <p>
-                            If you don't have an account on this site you need to register it first.
+                            If you don&#39t have an account on this site you need to register it first.
                         </p>
                     </div>
                 </div>

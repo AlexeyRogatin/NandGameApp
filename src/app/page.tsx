@@ -1,6 +1,6 @@
 import Link from "next/link";
 import React from "react";
-import BreakingParagraph from "./components/BreakingParagraph";
+import BreakingParagraph from "./lib/components/BreakingParagraph";
 
 export default function Home() {
   const asciiArt = `
@@ -39,7 +39,7 @@ export default function Home() {
         <h1>Compute the world</h1>
         <div>
           <p>This is an educational site, where you will get the knowledge of how computer works from basic physical elements.</p>
-          <p>If you are ready, then press the 'Lets start' button.</p>
+          <p>If you are ready, then press the &#39Lets start&#39 button.</p>
         </div>
         <div className="flex flex-col gap-30">
           <Link href="./levels" className="bordered">Lets start</Link>
