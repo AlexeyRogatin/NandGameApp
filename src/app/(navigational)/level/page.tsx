@@ -7,7 +7,7 @@ import LevelCanvas from "./LevelCanvas";
 import { useState } from "react";
 import Dialog from "../../lib/components/Dialog";
 import axios from "axios";
-import { FaildedTest, Scheme } from "../../lib/scheme/Components";
+import { FailedTest, Scheme } from "../../lib/scheme/Components";
 
 type Results = {
     components: number,
@@ -27,7 +27,7 @@ export default function Level() {
     const [resultOpen, setResultOpen] = useState(false);
     const [results, setResults] = useState<Results>({components: 0, nands: 0});
     const [failsOpen, setFailsOpen] = useState(false);
-    const [fails, setFails] = useState<FaildedTest[]>([]);
+    const [fails, setFails] = useState<FailedTest[]>([]);
 
     const handleCheck = () => {
         axios.post("/api/solve", scheme.pack(level!))
@@ -86,7 +86,7 @@ export default function Level() {
             </div>
 
             <Dialog isOpen={hintOpen} buttonText="Close" onClose={() => {setHintOpen(false)}}>
-                {level!.hint}
+                <BreakingParagraph>{level!.hint}</BreakingParagraph>
             </Dialog>
 
             <Dialog isOpen={resultOpen} buttonText={levelIndex + 1 !== levels.length ? "To the next level": "To level selection"} onClose={() => {

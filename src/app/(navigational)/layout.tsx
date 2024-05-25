@@ -6,8 +6,7 @@ export default function NavigationLayout({children}: {children: React.ReactNode}
     console.log(cookieJar.getAll());
     
     let links: {link: string, str: string}[] = [
-        {link: "/levels", str: "Levels"},
-        {link: "/level", str: "Level"},
+        {link: "/levels", str: "Level selection"},
     ]
 
     

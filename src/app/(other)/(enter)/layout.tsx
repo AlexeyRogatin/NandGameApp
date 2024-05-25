@@ -5,7 +5,7 @@ export default function Authorization({children}: {children: React.ReactNode;}) 
         <div className="flex h-full flex-col content-evenly justify-around">
             <div className="w-full flex justify-center content-center gap-100">
                 <div className="max-w-md bordered flex flex-col gap-30">
-                    <h2>Note before authorizing</h2>
+                    <h2>Note before creating an account</h2>
                     <div>
                         <p>
                             Registration and authorization is not necessary for completing the course, 

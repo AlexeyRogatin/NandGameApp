@@ -77,7 +77,20 @@ export default function LevelCanvas({level, setScheme}: {level: Level, setScheme
             }
         }
 
-        const loop = keyboard.makeKeyboardUpdateable(mouse.makeMouseUpdateable(() => {
+        const makeStopable = (func: () => void) => {
+            let running = true;
+
+            return [
+                function() {
+                    if (running) {
+                        func();
+                    }
+                },
+                () => {running = false;}
+            ]
+        }
+
+        const [loop, stop] = makeStopable(keyboard.makeKeyboardUpdateable(mouse.makeMouseUpdateable(() => {
             //colors
             const canvasStyle = window.getComputedStyle(canvas);
             const foreColor = canvasStyle.getPropertyValue("--foreground-rgb");
@@ -94,7 +107,8 @@ export default function LevelCanvas({level, setScheme}: {level: Level, setScheme
             ctx.fillStyle = backColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            //clear values cycle
+            // //clear values cycle
+            // scheme.clearValues();
             scheme.clearValues();
 
             //create links cycle
@@ -113,14 +127,16 @@ export default function LevelCanvas({level, setScheme}: {level: Level, setScheme
             //draw cycle
             drawGrid(backBrightAltColor, backAltColor, SIZE, DIV, DROP_BOX_SIZE); 
             dropBox.draw(ctx, foreColor, activeColor, backColor, SIZE);
-            scheme.linkAdder.draw(ctx, foreColor, activeColor, mouse, SIZE);
+            scheme.linkAdder.draw(ctx, foreColor, activeColor, backColor, mouse, SIZE);
             scheme.draw(ctx, foreColor, activeColor, backColor, SIZE);
-            mouse.draw(ctx, 50, foreColor.replace(")",", 0.25)"));
+            //mouse.draw(ctx, 50, foreColor.replace(")",", 0.25)"));
 
             requestAnimationFrame(loop);
-        }));
+        })));
 
         requestAnimationFrame(loop);
+
+        return () => {stop()};
     }, [level]);
 
     return <canvas ref={canvasRef} className="w-full h-full" onContextMenu={(e) => e.preventDefault()}/>;

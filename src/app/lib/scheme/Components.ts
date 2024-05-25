@@ -1,4 +1,3 @@
-import { Component } from "react";
 import Mouse from "./Mouse";
 import levels, { Level } from "@/app/lib/scheme/levels";
 import Keyboard from "./Keyboard";
@@ -63,7 +62,7 @@ export class SchemeNode {
     getValue () {
         if (isNaN(this.value)) {
             this.value = this.computeFunction().valueOf();
-        } 
+        }
         switch (this.realType) {
             case SchemeNodeType.BINARY: {
                 this.value = Leave1Bit(this.value.valueOf());
@@ -195,10 +194,10 @@ export class SchemeLink {
     constructor(outputNode: OutputNode, inputNode: InputNode) {
         this.inputNode = inputNode;
         this.outputNode = outputNode;
+        this.inputNode.computeFunction = () => this.getValue();
         if (this.inputNode.type === SchemeNodeType.SYNCH) {
             this.inputNode.realType = this.outputNode.realType;
         }
-        this.inputNode.computeFunction = () => this.getValue();
     }
 
     destroy () {
@@ -209,11 +208,15 @@ export class SchemeLink {
     }
 
     getValue () {
-        return this.outputNode.getValue();
+        let val = this.outputNode.getValue();
+        if (this.inputNode.type === SchemeNodeType.SYNCH) {
+            this.inputNode.realType = this.outputNode.realType;
+        }
+        return val;
     }
 
     draw (ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern,
-        activeColor: string | CanvasGradient | CanvasPattern, multiplier: number) {
+        activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number) {
         const WIDTH = 3;
         ctx.beginPath();
         ctx.moveTo(this.outputNode.x * multiplier, this.outputNode.y * multiplier);
@@ -225,6 +228,15 @@ export class SchemeLink {
         }
         ctx.lineWidth = WIDTH;
         ctx.stroke();
+
+        // if (this.inputNode.realType !== SchemeNodeType.BINARY) {
+        //     ctx.fillStyle = color;
+        //     ctx.strokeStyle = activeColor;
+        //     ctx.lineWidth = 1;
+        //     ctx.font = "bold 40px Consolas";
+        //     ctx.fillText(this.getValue().valueOf().toString(), (this.outputNode.x + this.inputNode.x) * multiplier / 2, (this.outputNode.y + this.inputNode.y) * multiplier / 2);
+        //     ctx.strokeText(this.getValue().valueOf().toString(), (this.outputNode.x + this.inputNode.x) * multiplier / 2, (this.outputNode.y + this.inputNode.y) * multiplier / 2);
+        // }
     }
 }
 
@@ -244,6 +256,8 @@ export class ComponentNode {
     func: ComponentFunction;
     deletable: boolean;
     nandCount: number;
+    memory = {};
+    compact = false;
 
     type: ComponentType;
     typeIndex: number;
@@ -267,6 +281,7 @@ export class ComponentNode {
             let values = this.inputNodes.map((node) => node.getValue());
             return this.func(values);
         }
+
         for (let index = 0; index < this.outputNodes.length; index++) {
             this.outputNodes[index].computeFunction = () => { 
                 if (this.outputNodes[index].type === SchemeNodeType.SYNCH) {
@@ -274,6 +289,9 @@ export class ComponentNode {
                     for (let inputIndex = 0; inputIndex < this.inputNodes.length; inputIndex++) {
                         if (this.inputNodes[inputIndex].type === SchemeNodeType.SYNCH) {
                             type = this.inputNodes[inputIndex].realType;
+                            if (type === SchemeNodeType.SIGNED || type === SchemeNodeType.NUMERIC) {
+                                break;
+                            }
                         }
                     }
                     if (this.outputNodes[index].realType !== type) {
@@ -290,24 +308,34 @@ export class ComponentNode {
         }
     }
 
+    getWidth() {
+        return this.compact ? 1 : this.width;
+    }
+
+    getHeight() {
+        return this.compact ? 1 : this.height;
+    }
+
     drawBody(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern,
         activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern,
         multiplier: number) {
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = color;
-            ctx.fillStyle = backColor;
-            ctx.beginPath();
-            ctx.roundRect(this.x * multiplier, this.y * multiplier, multiplier * this.width, multiplier * this.height, 10);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = color;
+        ctx.fillStyle = backColor;
+        ctx.beginPath();
+        ctx.roundRect(this.x * multiplier, this.y * multiplier, multiplier * this.getWidth(), multiplier * this.getHeight(), 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
     }
 
     drawNodes(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern,
         activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern,
         multiplier: number) {
-        this.inputNodes.forEach((node) => {node.draw(ctx, color, activeColor, backColor, multiplier)});
-        this.outputNodes.forEach((node) => {node.draw(ctx, color, activeColor, backColor, multiplier)});
+        if (!this.compact) {
+            this.inputNodes.forEach((node) => {node.draw(ctx, color, activeColor, backColor, multiplier)});
+            this.outputNodes.forEach((node) => {node.draw(ctx, color, activeColor, backColor, multiplier)});
+        }
     }
 
     draw (ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern,
@@ -319,8 +347,8 @@ export class ComponentNode {
 
     collided (x: number, y: number, multiplier: number) {
         return (
-            x >= this.x * multiplier && x <= (this.x + this.width) * multiplier
-            && y >= this.y * multiplier && y <= (this.y + this.height) * multiplier 
+            x >= this.x * multiplier && x <= (this.x + this.getWidth()) * multiplier
+            && y >= this.y * multiplier && y <= (this.y + this.getHeight()) * multiplier 
         );
     }
 
@@ -349,8 +377,8 @@ export class ComponentNode {
             this.changePos(mouseX - mouseRecentX, mouseY - mouseRecentY);
             return 0;
         } else {
-            if (this.x < leftBorder - 0.5 || this.x + this.width >= rightBorder - 0.5 
-                || this.y < topBorder - 0.5 || this.y + this.height >= bottomBorder - 0.5) {
+            if (this.x < leftBorder - 0.5 || this.x + this.width >= rightBorder + 0.5 
+                || this.y < topBorder - 0.5 || this.y + this.height >= bottomBorder + 0.5) {
                 if (this.deletable) {
                     return 1;
                 }
@@ -360,34 +388,9 @@ export class ComponentNode {
         }
     }
 
-    static clone(clone: ComponentNode, proto: ComponentNode) {
-        clone.x = proto.x;
-        clone.y = proto.y;
-
-        const clonedInputNodes = proto.inputNodes.map((inputNode) => {
-            return new InputNode(inputNode.x, inputNode.y, inputNode.name, inputNode.type, inputNode.computeFunction);
-        });
-        clone.inputNodes = clonedInputNodes;
-
-        const clonedOutputNodes = proto.outputNodes.map((outputNode) => {
-            return new OutputNode(outputNode.x, outputNode.y, outputNode.name, outputNode.type, outputNode.computeFunction);
-        });
-        clone.outputNodes = clonedOutputNodes;
-
-        const clonedFunc = proto.func;
-        clone.func = clonedFunc;
-
-        clone.deletable = proto.deletable;
-    }
-
     clone (): ComponentNode {
         const clonedComponentNode = new ComponentNode(this.type, this.typeIndex, this.x, this.y, [], [], NULL_FUNCTION);
-        this.cloneNode(clonedComponentNode);
         return clonedComponentNode;
-    }
-
-    cloneNode (clonedComponentNode: ComponentNode) {
-        ComponentNode.clone(clonedComponentNode, this); 
     }
 
     handleChanges (mouse: Mouse, keyboard: Keyboard, multiplier: Number) {
@@ -417,30 +420,42 @@ export class ComponentNode {
     }
 }
 
-export function ComponentGetter(level: Level, type: ComponentType, typeIndex: number, x: number, y: number, componentName = "") {
+export function ComponentGetter(level: Level, type: ComponentType, typeIndex: number, x: number, y: number, deletable = true, componentName = "") {
     switch (ComponentNode.getName(level, type, typeIndex)) {
-        case "ChangeBinaryInput": return new ChangeBinaryInput(type, typeIndex, x, y, componentName);
-        case "2BitInput": return new Binary2BitInput(type, typeIndex, x, y, componentName);
-        case "8BitInput": return new Binary8BitInput(type, typeIndex, x, y, componentName);
-        case "8BitSubInput": return new Binary8BitSubInput(type, typeIndex, x, y, componentName);
-        case "VoltageInput": return new VoltageInput(type, typeIndex, x, y, componentName);
-        case "NumberInput": return new NumberInput(type, typeIndex, x, y, componentName);
+        case "ChangeBinaryInput": return new ChangeBinaryInput(type, typeIndex, x, y, componentName, deletable);
+        case "2BitInput": return new Binary2BitInput(type, typeIndex, x, y, componentName, deletable);
+        case "8BitInput": return new Binary8BitInput(type, typeIndex, x, y, componentName, deletable);
+        case "8BitSubInput": return new Binary8BitSubInput(type, typeIndex, x, y, componentName, deletable);
+        case "VoltageInput": return new VoltageInput(type, typeIndex, x, y, componentName, deletable);
+        case "NumberInput": return new NumberInput(type, typeIndex, x, y, componentName, deletable);
 
-        case "Output": return new ComponentOutput(type, typeIndex, x, y, componentName);
-        case "2BitOutput": return new Binary2BitOutput(type, typeIndex, x, y, componentName);
-        case "8BitOutput": return new Binary8BitOutput(type, typeIndex, x, y, componentName);
-        case "8BitSubOutput": return new Binary8BitSubOutput(type, typeIndex, x, y, componentName);
+        case "Output": return new ComponentOutput(type, typeIndex, x, y, componentName, deletable);
+        case "2BitOutput": return new Binary2BitOutput(type, typeIndex, x, y, componentName, deletable);
+        case "8BitOutput": return new Binary8BitOutput(type, typeIndex, x, y, componentName, deletable);
+        case "8BitSubOutput": return new Binary8BitSubOutput(type, typeIndex, x, y, componentName, deletable);
 
-        case "OffRelay": return new ComponentOffRelay(type, typeIndex, x, y);
-        case "OnRelay": return new ComponentOnRelay(type, typeIndex, x, y);
-        case "Nand": return new ComponentNand(type, typeIndex, x, y);
-        case "Invert": return new ComponentInvert(type, typeIndex, x, y);
-        case "And": return new ComponentAnd(type, typeIndex, x, y);
-        case "Or": return new ComponentOr(type, typeIndex, x, y);
-        case "Xor": return new ComponentXor(type, typeIndex, x, y);
-        case "HalfAdder": return new ComponentHalfAdder(type, typeIndex, x, y);
-        case "FullAdder": return new ComponentFullAdder(type, typeIndex, x, y);
-        case "Add": return new ComponentAdder(type, typeIndex, x, y);
+        case "OffRelay": return new ComponentOffRelay(type, typeIndex, x, y, deletable);
+        case "OnRelay": return new ComponentOnRelay(type, typeIndex, x, y, deletable);
+        case "Nand": return new ComponentNand(type, typeIndex, x, y, deletable);
+        case "Invert": return new ComponentInvert(type, typeIndex, x, y, deletable);
+        case "And": return new ComponentAnd(type, typeIndex, x, y, deletable);
+        case "Or": return new ComponentOr(type, typeIndex, x, y, deletable);
+        case "Xor": return new ComponentXor(type, typeIndex, x, y, deletable);
+        case "HalfAdder": return new ComponentHalfAdder(type, typeIndex, x, y, deletable);
+        case "FullAdder": return new ComponentFullAdder(type, typeIndex, x, y, deletable);
+        case "Add": return new ComponentAdder(type, typeIndex, x, y, deletable);
+        case "Sub": return new ComponentSubber(type, typeIndex, x, y, deletable);
+        case "Mux": return new ComponentMultiplexer(type, typeIndex, x, y, deletable);
+        case "Demux": return new ComponentDemultiplexer(type, typeIndex, x, y, deletable);
+        case "Logic": return new ComponentLogicUnit(type, typeIndex, x, y, deletable);
+        case "Arith": return new ComponentArithmeticsUnit(type, typeIndex, x, y, deletable);
+        case "ALU": return new ComponentALU(type, typeIndex, x, y, deletable);
+        case "RS": return new ComponentRSFlipFlop(type, typeIndex, x, y, deletable);
+        case "D": return new ComponentDFlipFlop(type, typeIndex, x, y, deletable);
+        case "MS": return new ComponentMSFlipFlop(type, typeIndex, x, y, deletable);
+        case "MemoryCell": return new ComponentMemoryCell(type, typeIndex, x, y, deletable);
+        case "Counter": return new ComponentCounter(type, typeIndex, x, y, deletable);
+        case "RAM": return new ComponentRAM(type, typeIndex, x, y, deletable);
         default: return new ComponentNode(type, typeIndex,  x, y, [], [], NULL_FUNCTION);
     }
 } 
@@ -629,25 +644,23 @@ class TextBox {
 export class ComponentInput extends ComponentNode {
     val: Number = 0;
 
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, val: Number, 
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, val: Number, deletable = false, 
         outputs = [new OutputNode(x + 1, y + 0.5, name)], func: ComponentFunction = (a) => [this.val]) {
-        super(type, typeIndex, x, y, [], outputs, func, false);
+        super(type, typeIndex, x, y, [], outputs, func, deletable);
         this.val = val;
     }
     
     clone(): ComponentInput {
-        let clone = new ComponentInput(this.type, this.typeIndex, 0, 0, "", 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentInput;
+        let clone = new ComponentInput(this.type, this.typeIndex, this.x, this.y, "", 0);
+        return clone;
     }
 }
 
 export class ChangeBinaryInput extends ComponentInput {
     switch: Switch;
 
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
-        super(type, typeIndex, x, y, name, 0);
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
+        super(type, typeIndex, x, y, name, 0, deletable);
         this.switch = new Switch(x + 0.5, y + 0.5, 0.5, false);
     }
 
@@ -672,10 +685,8 @@ export class ChangeBinaryInput extends ComponentInput {
     }
 
     clone(): ChangeBinaryInput {
-        let clone = new ChangeBinaryInput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ChangeBinaryInput;
+        let clone = new ChangeBinaryInput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
@@ -683,10 +694,10 @@ export class Binary2BitInput extends ComponentInput {
     switch1: Switch;
     switch2: Switch;
 
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
         let output1 = new OutputNode(x + 1, y + 0.25, name + 0);
         let output2 = new OutputNode(x + 1, y + 0.75, name + 1);
-        super(type, typeIndex, x, y, name, 0, [output1, output2], (inputs) => [(this.val.valueOf() & (1 << 1)) >> 1, this.val.valueOf() & (1 << 0)]);
+        super(type, typeIndex, x, y, name, 0, deletable, [output1, output2], (inputs) => [(this.val.valueOf() & (1 << 1)) >> 1, this.val.valueOf() & (1 << 0)]);
         this.switch1 = new Switch(this.x + 0.5, this.y + 0.7, 0.5, true);
         this.switch2 = new Switch(this.x + 0.5, this.y + 0.3, 0.5, true);
     }
@@ -723,22 +734,20 @@ export class Binary2BitInput extends ComponentInput {
     }
 
     clone(): ChangeBinaryInput {
-        let clone = new ChangeBinaryInput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ChangeBinaryInput;
+        let clone = new ChangeBinaryInput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
 export class Binary8BitInput extends ComponentInput {
     switches: TextButton[] = [];
 
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
         let outputs: OutputNode[] = [];
         for (let index = 0; index < 8; index ++) {
             outputs.push(new OutputNode(x + 1, y + 0.5 + index, name + index));  
         }
-        super(type, typeIndex, x, y, name, 0, outputs, (inputs) => [
+        super(type, typeIndex, x, y, name, 0, deletable, outputs, (inputs) => [
             ...Array.from({ length: 8 }, (value, index) => index).map((index) => (this.val.valueOf() & (1 << (this.switches.length - index - 1))) >> (this.switches.length - index - 1))
         ]);
         for (let index = 0; index < 8; index ++) {
@@ -779,22 +788,20 @@ export class Binary8BitInput extends ComponentInput {
     }
 
     clone(): Binary8BitInput {
-        let clone = new Binary8BitInput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as Binary8BitInput;
+        let clone = new Binary8BitInput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
 export class Binary8BitSubInput extends ComponentInput {
     switches: TextButton[] = [];
 
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
         let outputs: OutputNode[] = [];
         for (let index = 0; index < 8; index ++) {
             outputs.push(new OutputNode(x + 1, y + 0.5 + index, name + index));  
         }
-        super(type, typeIndex, x, y, name, 0, outputs, (inputs) => {
+        super(type, typeIndex, x, y, name, 0, deletable,outputs, (inputs) => {
             let outputs = [];
             outputs.push(this.val.valueOf() < 0 ? 1 : 0);
             for (let index = 1; index < 8; index ++) {
@@ -846,16 +853,17 @@ export class Binary8BitSubInput extends ComponentInput {
     }
 
     clone(): Binary8BitInput {
-        let clone = new Binary8BitInput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as Binary8BitInput;
+        let clone = new Binary8BitInput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
 export class VoltageInput extends ComponentInput {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
-        super(type, typeIndex, x, y, name, 1);
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
+        if (name === "") {
+            name = "v";
+        }
+        super(type, typeIndex, x, y, name, 1, deletable);
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -868,18 +876,16 @@ export class VoltageInput extends ComponentInput {
     }
 
     clone(): VoltageInput {
-        let clone = new VoltageInput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as VoltageInput;
+        let clone = new VoltageInput(this.type, this.typeIndex, this.x, this.y, "", true);
+        return clone;
     }
 }
 
 export class NumberInput extends ComponentInput {
     textBox: TextBox;
 
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
-        super(type, typeIndex, x, y, name, 0, [new OutputNode(x + 1, y + 0.5, name, SchemeNodeType.SIGNED)]);
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
+        super(type, typeIndex, x, y, name, 0, deletable, [new OutputNode(x + 1, y + 0.5, name, SchemeNodeType.SIGNED)]);
         this.textBox = new TextBox(x + 0.5, y + 0.5, 0.65, 0.3);
     }
 
@@ -902,17 +908,15 @@ export class NumberInput extends ComponentInput {
     }
 
     clone(): ChangeBinaryInput {
-        let clone = new ChangeBinaryInput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ChangeBinaryInput;
+        let clone = new ChangeBinaryInput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }    
 }
 
 export class ComponentOutput extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, 
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false,
             inputs = [new InputNode(x, y + 0.5, name, SchemeNodeType.SIGNED)], func: ComponentFunction = (inputs) => [inputs[0]]) {
-        super(type, typeIndex, x, y, inputs, [], func, false);
+        super(type, typeIndex, x, y, inputs, [], func, deletable);
     }
 
     getValue() {
@@ -929,18 +933,16 @@ export class ComponentOutput extends ComponentNode {
     }
 
     clone(): ComponentOutput {
-        let clone = new ComponentOutput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentOutput;
+        let clone = new ComponentOutput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
 export class Binary2BitOutput extends ComponentOutput {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
         let input1 = new InputNode(x, y + 0.75, name + 0);
         let input2 = new InputNode(x, y + 0.25, name + 1);
-        super(type, typeIndex, x, y, name, [input1, input2], (inputs) => [inputs[1].valueOf() << 1 | inputs[0].valueOf()]);
+        super(type, typeIndex, x, y, name, deletable, [input1, input2], (inputs) => [inputs[1].valueOf() << 1 | inputs[0].valueOf()]);
     }
 
     getValue() {
@@ -952,20 +954,18 @@ export class Binary2BitOutput extends ComponentOutput {
     }
 
     clone(): Binary2BitOutput {
-        let clone = new Binary2BitOutput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as Binary2BitOutput;
+        let clone = new Binary2BitOutput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
 export class Binary8BitOutput extends ComponentOutput {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
         let inputs: InputNode[] = [];
         for (let index = 0; index < 8; index++) {
             inputs.push(new InputNode(x, y + 0.5 + index, name + index))
         }
-        super(type, typeIndex, x, y, name, inputs, (inputs) => [inputs.reduce((acc, cur, index) => acc.valueOf() | cur.valueOf() << (inputs.length - index - 1), 0)]);
+        super(type, typeIndex, x, y, name, deletable, inputs, (inputs) => [inputs.reduce((acc, cur, index) => acc.valueOf() | cur.valueOf() << (inputs.length - index - 1), 0)]);
         this.height = 8;
     }
 
@@ -978,20 +978,18 @@ export class Binary8BitOutput extends ComponentOutput {
     }
 
     clone(): Binary8BitOutput {
-        let clone = new Binary8BitOutput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as Binary8BitOutput;
+        let clone = new Binary8BitOutput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
 export class Binary8BitSubOutput extends ComponentOutput {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, name: string, deletable = false) {
         let inputs: InputNode[] = [];
         for (let index = 0; index < 8; index++) {
             inputs.push(new InputNode(x, y + 0.5 + index, name + index))
         }
-        super(type, typeIndex, x, y, name, inputs, (inputs) => {
+        super(type, typeIndex, x, y, name, deletable, inputs, (inputs) => {
             let res = 0;
             for (let index = 7; index > 0; index--) {
                 res |= inputs[index].valueOf() << (7 - index);
@@ -1013,19 +1011,17 @@ export class Binary8BitSubOutput extends ComponentOutput {
     }
 
     clone(): Binary8BitOutput {
-        let clone = new Binary8BitOutput(this.type, this.typeIndex, 0, 0, "");
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as Binary8BitOutput;
+        let clone = new Binary8BitOutput(this.type, this.typeIndex, this.x, this.y, "");
+        return clone;
     }
 }
 
 export class ComponentOffRelay extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "c");
         let input2 = new InputNode(x, y + 0.75, "x");
         let output = new OutputNode(x + 1, y + 0.5, "o");
-        super(type, typeIndex, x, y, [input1, input2], [output], (inputs) => [inputs[0] ? inputs[1] : 0]);
+        super(type, typeIndex, x, y, [input1, input2], [output], (inputs) => [inputs[0] ? inputs[1] : 0], deletable);
     }
 
     drawBody(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1057,19 +1053,17 @@ export class ComponentOffRelay extends ComponentNode {
     }
 
     clone(): ComponentOffRelay {
-        let clone = new ComponentOffRelay(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentOffRelay;
+        let clone = new ComponentOffRelay(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 }
 
 export class ComponentOnRelay extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "c");
         let input2 = new InputNode(x, y + 0.75, "x");
         let output = new OutputNode(x + 1, y + 0.5, "o");
-        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [!inputs[0] ? inputs[1] : 0]);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [!inputs[0] ? inputs[1] : 0], deletable);
     }
 
     drawBody(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1101,26 +1095,22 @@ export class ComponentOnRelay extends ComponentNode {
     }
 
     clone(): ComponentOnRelay {
-        let clone = new ComponentOnRelay(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentOnRelay;
+        let clone = new ComponentOnRelay(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 }
 
 export class ComponentNand extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SYNCH);
         let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SYNCH);
         let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SYNCH);
-        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [~(inputs[0].valueOf() & inputs[1].valueOf())], true, 1);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [~(inputs[0].valueOf() & inputs[1].valueOf())], deletable, 1);
     }
 
     clone(): ComponentNand {
-        let clone = new ComponentNand(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentNand;
+        let clone = new ComponentNand(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1134,17 +1124,15 @@ export class ComponentNand extends ComponentNode {
 }
 
 export class ComponentInvert extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input = new InputNode(x, y + 0.5, "a", SchemeNodeType.SYNCH);
         let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SYNCH);
-        super(type, typeIndex,  x, y, [input], [output], (inputs) => [~inputs[0]], true, 1);
+        super(type, typeIndex,  x, y, [input], [output], (inputs) => [~inputs[0]], deletable, 1);
     }
 
     clone(): ComponentInvert {
-        let clone = new ComponentInvert(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentInvert;
+        let clone = new ComponentInvert(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1158,18 +1146,16 @@ export class ComponentInvert extends ComponentNode {
 }
 
 export class ComponentAnd extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SYNCH);
         let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SYNCH);
         let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SYNCH);
-        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [inputs[0].valueOf() & inputs[1].valueOf()], true, 2);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [inputs[0].valueOf() & inputs[1].valueOf()], deletable, 2);
     }
 
     clone(): ComponentAnd {
-        let clone = new ComponentAnd(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentAnd;
+        let clone = new ComponentAnd(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1183,18 +1169,16 @@ export class ComponentAnd extends ComponentNode {
 }
 
 export class ComponentOr extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SYNCH);
         let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SYNCH);
         let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SYNCH);
-        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [inputs[0].valueOf() | inputs[1].valueOf()], true, 4);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [inputs[0].valueOf() | inputs[1].valueOf()], deletable, 4);
     }
 
     clone(): ComponentOr {
-        let clone = new ComponentOr(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentOr;
+        let clone = new ComponentOr(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1208,18 +1192,16 @@ export class ComponentOr extends ComponentNode {
 }
 
 export class ComponentXor extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SYNCH);
         let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SYNCH);
         let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SYNCH);
-        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [Leave8BitsSigned(inputs[0].valueOf() ^ inputs[1].valueOf())], true, 6);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [Leave8BitsSigned(inputs[0].valueOf() ^ inputs[1].valueOf())], deletable, 6);
     }
 
     clone(): ComponentXor {
-        let clone = new ComponentXor(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentXor;
+        let clone = new ComponentXor(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1233,19 +1215,19 @@ export class ComponentXor extends ComponentNode {
 }
 
 export class ComponentHalfAdder extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a");
         let input2 = new InputNode(x, y + 0.75, "b");
         let output1 = new OutputNode(x + 1, y + 0.25, "c");
         let output2 = new OutputNode(x + 1, y + 0.75, "s");
-        super(type, typeIndex,  x, y, [input1, input2], [output1, output2], (inputs) => [inputs[0].valueOf() & inputs[1].valueOf() ? 1 : 0, inputs[0].valueOf() ^ inputs[1].valueOf() ? 1 : 0], true, 9);
+        super(type, typeIndex,  x, y, [input1, input2], [output1, output2], (inputs) => 
+            [inputs[0].valueOf() & inputs[1].valueOf() ? 1 : 0, inputs[0].valueOf() ^ inputs[1].valueOf() ? 1 : 0]
+        , deletable, 9);
     }
 
     clone(): ComponentHalfAdder {
-        let clone = new ComponentHalfAdder(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentHalfAdder;
+        let clone = new ComponentHalfAdder(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1259,7 +1241,7 @@ export class ComponentHalfAdder extends ComponentNode {
 }
 
 export class ComponentFullAdder extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a");
         let input2 = new InputNode(x, y + 0.5, "b");
         let input3 = new InputNode(x, y + 0.75, "c");
@@ -1268,14 +1250,12 @@ export class ComponentFullAdder extends ComponentNode {
         super(type, typeIndex,  x, y, [input1, input2, input3], [output1, output2], (inputs) => {
             let sum = inputs.reduce((acc, cur) => acc.valueOf() + cur.valueOf(), 0);
             return [(sum.valueOf() & (1 << 1)) >> 1, sum.valueOf() & (1 << 0)];
-        }, true, 22);
+        }, deletable, 22);
     }
 
     clone(): ComponentFullAdder {
-        let clone = new ComponentAdder(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentAdder;
+        let clone = new ComponentFullAdder(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1289,18 +1269,22 @@ export class ComponentFullAdder extends ComponentNode {
 }
 
 export class ComponentAdder extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SIGNED);
         let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SIGNED);
         let output = new OutputNode(x + 1, y + 0.5, "s", SchemeNodeType.SIGNED);
-        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [Leave8BitsSigned(inputs[0].valueOf() + inputs[1].valueOf())], true, 176);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => 
+            {   
+                let addition = inputs[0].valueOf() + inputs[1].valueOf();
+                let leaveSigned = Leave8BitsSigned(addition);
+                return [leaveSigned];
+            },
+        deletable, 176);
     }
 
     clone(): ComponentAdder {
-        let clone = new ComponentAdder(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentAdder;
+        let clone = new ComponentAdder(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1314,18 +1298,16 @@ export class ComponentAdder extends ComponentNode {
 }
 
 export class ComponentSubber extends ComponentNode {
-    constructor(type: ComponentType, typeIndex: number, x: number, y: number) {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
         let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SIGNED);
         let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SIGNED);
         let output = new OutputNode(x + 1, y + 0.5, "s", SchemeNodeType.SIGNED);
-        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [Leave8BitsSigned(inputs[0].valueOf() - inputs[1].valueOf())], true, 176);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => [Leave8BitsSigned(inputs[0].valueOf() - inputs[1].valueOf())], deletable, 176);
     }
 
     clone(): ComponentSubber {
-        let clone = new ComponentSubber(this.type, this.typeIndex, 0, 0);
-        super.cloneNode(clone);
-        clone.initialize();
-        return clone as ComponentSubber;
+        let clone = new ComponentSubber(this.type, this.typeIndex, this.x, this.y);
+        return clone;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
@@ -1335,6 +1317,438 @@ export class ComponentSubber extends ComponentNode {
         ctx.textAlign = "center";
         ctx.font = "bold 20px Consolas";
         ctx.fillText("SUB", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentMultiplexer extends ComponentNode {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SYNCH);
+        let input2 = new InputNode(x, y + 0.5, "b", SchemeNodeType.SYNCH);
+        let input3 = new InputNode(x, y + 0.75, "c", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SYNCH);
+        super(type, typeIndex,  x, y, [input1, input2, input3], [output], (inputs) => 
+            [((inputs[2].valueOf() ? ~0 : 0) & inputs[1].valueOf()) | ((inputs[2].valueOf() ? 0 : ~0) & inputs[0].valueOf())]
+        , deletable, 9);
+    }
+
+    clone(): ComponentMultiplexer {
+        let clone = new ComponentMultiplexer(this.type, this.typeIndex, this.x, this.y);
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("MUX", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentDemultiplexer extends ComponentNode {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "x", SchemeNodeType.SYNCH);
+        let input2 = new InputNode(x, y + 0.75, "c", SchemeNodeType.BINARY);
+        let output1 = new OutputNode(x + 1, y + 0.25, "a", SchemeNodeType.SYNCH);
+        let output2 = new OutputNode(x + 1, y + 0.75, "b", SchemeNodeType.SYNCH);
+        super(type, typeIndex,  x, y, [input1, input2], [output1, output2], (inputs) => 
+            [inputs[1].valueOf() ? 0 : inputs[0].valueOf(), inputs[1].valueOf() ? inputs[0].valueOf() : 0]
+        , deletable, 5);
+    }
+
+    clone(): ComponentDemultiplexer {
+        let clone = new ComponentDemultiplexer(this.type, this.typeIndex, this.x, this.y);
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("DEMUX", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentLogicUnit extends ComponentNode {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SIGNED);
+        let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SIGNED);
+        let input3 = new InputNode(x, y + 1.25, "op0", SchemeNodeType.BINARY);
+        let input4 = new InputNode(x, y + 1.75, "op1", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 1, y + 1, "a", SchemeNodeType.SIGNED);
+        super(type, typeIndex,  x, y, [input1, input2, input3, input4], [output], (inputs) => 
+            {
+                let a = inputs[0].valueOf();
+                let b = inputs[1].valueOf();
+                let op0 = inputs[2].valueOf();
+                let op1 = inputs[3].valueOf();
+                if (!op0) {
+                    if (!op1) {
+                        return [a & b];
+                    } else {
+                        return [a | b];
+                    }
+                } else {
+                    if (!op1) {
+                        return [a ^ b];
+                    } else {
+                        return [~a];
+                    }
+                }
+            }
+        , deletable, 131);
+        this.height = 2;
+        this.compact = true;
+    }
+
+    clone(): ComponentLogicUnit {
+        let clone = new ComponentLogicUnit(this.type, this.typeIndex, this.x, this.y);
+        clone.compact = false;
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("LOGIC", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentArithmeticsUnit extends ComponentNode {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SIGNED);
+        let input2 = new InputNode(x, y + 0.75, "b", SchemeNodeType.SIGNED);
+        let input3 = new InputNode(x, y + 1.25, "op0", SchemeNodeType.BINARY);
+        let input4 = new InputNode(x, y + 1.75, "op1", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 1, y + 1, "a", SchemeNodeType.SIGNED);
+        super(type, typeIndex,  x, y, [input1, input2, input3, input4], [output], (inputs) => 
+            {
+                let a = inputs[0].valueOf();
+                let b = inputs[1].valueOf();
+                let op0 = inputs[2].valueOf();
+                let op1 = inputs[3].valueOf();
+                if (!op0) {
+                    if (!op1) {
+                        return [a + b];
+                    } else {
+                        return [a - b];
+                    }
+                } else {
+                    if (!op1) {
+                        return [a + 1];
+                    } else {
+                        return [a - 1];
+                    }
+                }
+            }
+        , deletable, 496);
+        this.height = 2;
+        this.compact = true;
+    }
+
+    clone(): ComponentArithmeticsUnit {
+        let clone = new ComponentArithmeticsUnit(this.type, this.typeIndex, this.x, this.y);
+        clone.compact = false;
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("ARITH", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentALU extends ComponentNode {
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "a", SchemeNodeType.SIGNED);
+        let input2 = new InputNode(x, y + 0.5, "b", SchemeNodeType.SIGNED);
+        let input3 = new InputNode(x, y + 1, "op0", SchemeNodeType.BINARY);
+        let input4 = new InputNode(x, y + 1.25, "op1", SchemeNodeType.BINARY);
+        let input5 = new InputNode(x, y + 1.75, "u", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 1, y + 1, "a", SchemeNodeType.SIGNED);
+        super(type, typeIndex,  x, y, [input1, input2, input3, input4, input5], [output], (inputs) => 
+            {
+                let a = inputs[0].valueOf();
+                let b = inputs[1].valueOf();
+                let op0 = inputs[2].valueOf();
+                let op1 = inputs[3].valueOf();
+                let u = inputs[4].valueOf();
+                if (u) {
+                    if (!op0) {
+                        if (!op1) {
+                            return [a + b];
+                        } else {
+                            return [a - b];
+                        }
+                    } else {
+                        if (!op1) {
+                            return [a + 1];
+                        } else {
+                            return [a - 1];
+                        }
+                    }
+                } else {
+                    if (!op0) {
+                        if (!op1) {
+                            return [a & b];
+                        } else {
+                            return [a | b];
+                        }
+                    } else {
+                        if (!op1) {
+                            return [a ^ b];
+                        } else {
+                            return [~a];
+                        }
+                    }
+                }
+            }
+        , deletable, 699);
+        this.height = 2;
+        this.compact = true;
+    }
+
+    clone(): ComponentALU {
+        let clone = new ComponentALU(this.type, this.typeIndex, this.x, this.y - 0.5);
+        clone.compact = false;
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("ALU", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentRSFlipFlop extends ComponentNode {
+    val = 0;
+
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "s", SchemeNodeType.BINARY);
+        let input2 = new InputNode(x, y + 0.75, "r", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.BINARY);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => {
+            if (inputs[0].valueOf() & ~inputs[1].valueOf()) {
+                this.val = 1;
+            }
+            if (~inputs[0].valueOf() & inputs[1].valueOf()) {
+                this.val = 0;
+            }
+            if (inputs[0].valueOf() & inputs[1].valueOf()) {
+                this.val = 1;
+            }
+            return [this.val];
+        }, deletable, 4);
+    }
+
+    clone(): ComponentRSFlipFlop {
+        let clone = new ComponentRSFlipFlop(this.type, this.typeIndex, this.x, this.y);
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("RS", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentDFlipFlop extends ComponentNode {
+    val = 0;
+
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "d", SchemeNodeType.BINARY);
+        let input2 = new InputNode(x, y + 0.75, "c", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.BINARY);
+        super(type, typeIndex,  x, y, [input1, input2], [output], (inputs) => {
+            if (inputs[1].valueOf()) {
+                this.val = inputs[0].valueOf();
+            }
+            return [this.val.valueOf()];
+        }, deletable, 9);
+    }
+
+    clone(): ComponentDFlipFlop {
+        let clone = new ComponentDFlipFlop(this.type, this.typeIndex, this.x, this.y);
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("D", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentMSFlipFlop extends ComponentNode {
+    slaveVal = 0;
+    val = 0;
+
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "d", SchemeNodeType.BINARY);
+        let input2 = new InputNode(x, y + 0.5, "c", SchemeNodeType.BINARY);
+        let input3 = new InputNode(x, y + 0.75, "s", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.BINARY);
+        super(type, typeIndex,  x, y, [input1, input2, input3], [output], (inputs) => {
+            if (inputs[1].valueOf() & inputs[2].valueOf()) {
+                this.slaveVal = inputs[0].valueOf();
+            }
+            if (!inputs[2].valueOf()) {
+                this.val = this.slaveVal;
+            }
+            return [this.val.valueOf()];
+        }, deletable, 21);
+    }
+
+    clone(): ComponentMSFlipFlop {
+        let clone = new ComponentMSFlipFlop(this.type, this.typeIndex, this.x, this.y);
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("MS", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentMemoryCell extends ComponentNode {
+    slaveVal = 0;
+    val = 0;
+
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "d", SchemeNodeType.SIGNED);
+        let input2 = new InputNode(x, y + 0.5, "c", SchemeNodeType.SIGNED);
+        let input3 = new InputNode(x, y + 0.75, "s", SchemeNodeType.SIGNED);
+        let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SIGNED);
+        super(type, typeIndex,  x, y, [input1, input2, input3], [output], (inputs) => {
+            if (inputs[1].valueOf() & inputs[2].valueOf()) {
+                this.slaveVal = inputs[0].valueOf();
+            }
+            if (!inputs[2].valueOf()) {
+                this.val = this.slaveVal;
+            }
+            return [this.val.valueOf()];
+        }, deletable, 168);
+    }
+
+    clone(): ComponentMemoryCell {
+        let clone = new ComponentMemoryCell(this.type, this.typeIndex, this.x, this.y);
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("MEM", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentCounter extends ComponentNode {
+    val = 0;
+    sync = 0;
+
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "st", SchemeNodeType.SIGNED);
+        let input2 = new InputNode(x, y + 0.5, "x", SchemeNodeType.SIGNED);
+        let input3 = new InputNode(x, y + 0.75, "s", SchemeNodeType.SIGNED);
+        let output = new OutputNode(x + 1, y + 0.5, "x", SchemeNodeType.SIGNED);
+        super(type, typeIndex,  x, y, [input1, input2, input3], [output], (inputs) => {
+            if (!inputs[2].valueOf() && this.sync) {
+                if (inputs[0].valueOf()) {
+                    this.val = inputs[1].valueOf();
+                } else {
+                    this.val++;
+                }
+            }
+            this.sync = inputs[2].valueOf();
+            return [this.val.valueOf()];
+        }, deletable, 416);
+    }
+
+    clone(): ComponentCounter {
+        let clone = new ComponentCounter(this.type, this.typeIndex, this.x, this.y);
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("CL", (this.x + 0.5) * multiplier, (this.y + 0.5) * multiplier);
+    }     
+}
+
+export class ComponentRAM extends ComponentNode {
+    memory: number[] = [];
+    sync = 0;
+
+    constructor(type: ComponentType, typeIndex: number, x: number, y: number, deletable = true) {
+        let input1 = new InputNode(x, y + 0.25, "st", SchemeNodeType.BINARY);
+        let input2 = new InputNode(x, y + 0.75, "ad", SchemeNodeType.NUMERIC);
+        let input3 = new InputNode(x, y + 1.25, "x", SchemeNodeType.SIGNED);
+        let input4 = new InputNode(x, y + 1.75, "s", SchemeNodeType.BINARY);
+        let output = new OutputNode(x + 2, y + 1, "x", SchemeNodeType.SIGNED);
+        super(type, typeIndex,  x, y, [input1, input2, input3, input4], [output], (inputs) => {
+            let store = Boolean(inputs[0].valueOf());
+            let address = inputs[1].valueOf();
+            let number = inputs[2].valueOf();
+            let s = inputs[3].valueOf();
+
+            if (!s && this.sync) {
+                if (store) {
+                    this.memory[address] = number;
+                }
+            }
+            this.sync = s;
+            return [this.memory[address] ? this.memory[address] : 0];
+        }, deletable, 413);
+        this.height = 2;
+        this.width = 2;
+        this.compact = true;
+    }
+
+    clone(): ComponentRAM {
+        let clone = new ComponentRAM(this.type, this.typeIndex, this.x - 0.5, this.y - 0.5);
+        clone.compact = false;
+        return clone;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern, backColor: string | CanvasGradient | CanvasPattern, multiplier: number): void {
+        super.draw(ctx, color, activeColor, backColor, multiplier);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle"
+        ctx.textAlign = "center";
+        ctx.font = "bold 20px Consolas";
+        ctx.fillText("RAM", (this.x + this.getWidth() / 2) * multiplier, (this.y + 0.5) * multiplier);
     }     
 }
 
@@ -1362,21 +1776,21 @@ export class LinkAdder {
 
     draw(ctx: CanvasRenderingContext2D,
         foreColor: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern,
-        mouse: Mouse, multiplier: number) {
+        backColor: string | CanvasGradient | CanvasPattern, mouse: Mouse, multiplier: number) {
         if (this.inputNode !== null || this.outputNode !== null) {
             if (this.inputNode !== null) {
                 let volatileLink = new SchemeLink(
                     new OutputNode(mouse.x / multiplier, mouse.y / multiplier, "", SchemeNodeType.BINARY, NULL_LINK_FUNCTION),
                     this.inputNode
                 );
-                volatileLink.draw(ctx, foreColor, activeColor, multiplier);
+                volatileLink.draw(ctx, foreColor, activeColor, backColor, multiplier);
             } 
             if (this.outputNode !== null) {
                 let volatileLink = new SchemeLink(
                     this.outputNode,
                     new InputNode(mouse.x / multiplier, mouse.y / multiplier, "", SchemeNodeType.BINARY, NULL_LINK_FUNCTION)
                 );
-                volatileLink.draw(ctx, foreColor, activeColor, multiplier);
+                volatileLink.draw(ctx, foreColor, activeColor, backColor, multiplier);
             }
         }
     }
@@ -1417,7 +1831,7 @@ export class LinkAdder {
     }
 }
 
-export type FaildedTest = {
+export type FailedTest = {
     testIndex: number;
     outArgs: number[];
 }
@@ -1446,10 +1860,10 @@ export class Scheme {
     setLevel(level: Level) {
         this.level = level;
         level.inComponents.forEach((component, index) => {
-            this.addInComponent(ComponentGetter(level, ComponentType.IN, index, 3, 1 + index * 2, level.tests.inArgs[index]) as ComponentInput);
+            this.addInComponent(ComponentGetter(level, ComponentType.IN, index, 3, 1 + index * 2, false, level.tests.inArgs[index]) as ComponentInput);
         });
         level.outComponents.forEach((component, index) => {
-            this.addOutComponent(ComponentGetter(level, ComponentType.OUT, index, 5, 1 + index * 2, level.tests.outArgs[index]) as ComponentOutput);
+            this.addOutComponent(ComponentGetter(level, ComponentType.OUT, index, 5, 1 + index * 2, false, level.tests.outArgs[index]) as ComponentOutput);
         });
     }
 
@@ -1565,7 +1979,7 @@ export class Scheme {
     draw(ctx: CanvasRenderingContext2D,
         foreColor: string | CanvasGradient | CanvasPattern, activeColor: string | CanvasGradient | CanvasPattern,
         backColor: string | CanvasGradient | CanvasPattern, multiplier: number) {
-        this.links.forEach((link) => {link.draw(ctx, foreColor, activeColor, multiplier)});
+        this.links.forEach((link) => {link.draw(ctx, foreColor, activeColor, backColor, multiplier)});
             
         for (let index = this.components.length - 1; index >= 0; index--) {
             let component = this.components[index];
@@ -1645,7 +2059,7 @@ export class Scheme {
     }
 
     getFailedTests() {
-        let failedTests: FaildedTest[] = [];
+        let failedTests: FailedTest[] = [];
         this.level?.tests.data.forEach((test, index) => {
             this.clearValues();
             this.setInputs(test.inData);
@@ -1670,7 +2084,7 @@ export class DropBox {
 
     setLevel(level: Level) {
         level.components.forEach((component, index) => {
-            let newComponent = ComponentGetter(level, ComponentType.DROP_BOX, index, 0.5, 0.5 + index * 1.25);
+            let newComponent = ComponentGetter(level, ComponentType.DROP_BOX, index, 0.5, 0.25 + (1.2) * index);
             this.addComponent(newComponent);
         });
     }

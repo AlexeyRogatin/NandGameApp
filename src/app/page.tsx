@@ -39,7 +39,7 @@ export default function Home() {
         <h1>Compute the world</h1>
         <div>
           <p>This is an educational site, where you will get the knowledge of how computer works from basic physical elements.</p>
-          <p>If you are ready, then press the &#39Lets start&#39 button.</p>
+          <p>If you are ready, then press the Lets start button.</p>
         </div>
         <div className="flex flex-col gap-30">
           <Link href="./levels" className="bordered">Lets start</Link>

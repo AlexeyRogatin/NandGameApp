@@ -27,6 +27,7 @@ body {
   line-height: 20px;
   text-wrap: wrap;
   height: 100vh;
+  markdown: "1";
 
   color: var(--foreground-rgb);
   background: linear-gradient(

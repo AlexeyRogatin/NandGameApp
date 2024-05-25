@@ -16,7 +16,6 @@ export async function POST(request: NextRequest) {
         return makeResponse(200, {success: failedTests.length === 0, failedTests: failedTests,
             componentCount: componentCount, nandCount: nandCount});
     } catch (error) {
-        console.log(error);
         return makeResponse(500, {error: "Error while checking solution"});
     }
 }
