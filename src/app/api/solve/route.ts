@@ -1,8 +1,4 @@
-import { ComponentGetter, ComponentNode, Scheme, SchemeLink } from "@/app/lib/scheme/Components";
-import { EasyLink } from "@/app/(navigational)/level/LevelCanvas";
-import conn from "@/app/lib/db/db";
-import dbString from "@/app/lib/db/dbString";
-import { makeResponse, makeStatusResponse } from "@/app/lib/db/response";
+import { Scheme } from "@/lib/schemeworks/Components";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -13,9 +9,15 @@ export async function POST(request: NextRequest) {
         let componentCount = scheme.getComponentCount();
         let nandCount = scheme.getNandCount();
 
-        return makeResponse(200, {success: failedTests.length === 0, failedTests: failedTests,
-            componentCount: componentCount, nandCount: nandCount});
+        let data = {
+            success: failedTests.length === 0,
+            failedTests: failedTests,
+            componentCount: componentCount,
+            nandCount: nandCount
+        };
+
+        return NextResponse.json(data, { status: 200 });
     } catch (error) {
-        return makeResponse(500, {error: "Error while checking solution"});
+        return NextResponse.json({ error: "Error while checking solution" }, { status: 500 });
     }
 }

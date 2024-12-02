@@ -26,8 +26,6 @@ body {
   font-weight: 400;
   line-height: 20px;
   text-wrap: wrap;
-  height: 100vh;
-  markdown: "1";
 
   color: var(--foreground-rgb);
   background: linear-gradient(
@@ -36,6 +34,16 @@ body {
       var(--background-end-rgb)
     )
     var(--background-start-rgb);
+}
+
+.ver-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.hor-container {
+  display: flex;
+  flex-direction: row;
 }
 
 h1 {
@@ -87,44 +95,8 @@ pre {
   padding: 10px;
 }
 
-input{
+input {
   color: var(--background-start-rgb)
-}
-
-.gap-10{
-  gap: 10px;
-}
-
-.gap-20{
-  gap: 20px;
-}
-
-.gap-30{
-  gap: 30px;
-}
-
-.gap-50{
-  gap: 50px;
-}
-
-.gap-100{
-  gap: 100px;
-}
-
-.ma-10 {
-  margin: 10px;
-}
-
-.ma-20 {
-  margin: 20px;
-}
-
-.ma-30 {
-  margin: 30px;
-}
-
-.overflow-y {
-  overflow-y: auto;
 }
 
 canvas {

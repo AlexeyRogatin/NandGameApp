@@ -1,13 +1,13 @@
-import { makeResponse, makeStatusResponse } from "@/app/lib/db/response";
 import { cookies } from "next/headers";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
     try {
         const cookieJar = cookies();
         cookieJar.delete("user");
-        return makeStatusResponse(200);
+        
+        return NextResponse.json({}, {status: 200});
     } catch (error) {
-        return makeResponse(500, {error: "Error while exiting profile"});
+        return NextResponse.json({ error: "Error while exiting profile" }, {status: 500});
     }
 }

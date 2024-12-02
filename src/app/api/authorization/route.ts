@@ -1,30 +1,40 @@
-import conn from "@/app/lib/db/db";
-import dbString from "@/app/lib/db/dbString";
-import { makeResponse, makeStatusResponse } from "@/app/lib/db/response";
-import { cookies } from "next/headers";
+
+import User from "@/lib/database/entities/User";
+import { encodeToken } from "@/lib/encodings/encode";
+import { Session, setSessionToCookie } from "@/lib/session/session";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(request: NextRequest) {
-    const body = await request.json();
-    const query = 'SELECT password, role FROM users WHERE login = $1';
-    const values = [dbString(body.login)];
+export type AuthorizationData = {
+    email: string,
+    password: string
+}
 
-    try {
-        const result = await conn.query(query, values);
-        if (result.rows.length === 0) {
-            return makeResponse(500, {error: "Incorrect login"});
-        }
-        if (result.rows[0].password.toString() !== body.pass.toString()) {
-            return makeResponse(500, {error: "Incorrect password"});
-        }
-        let data = {
-            login: body.login,
-            role: result.rows[0].role[0],
-        }
-        let cookieJar = cookies();
-        cookieJar.set("user", JSON.stringify(data));
-        return makeResponse(200, {role: result.rows[0].role});
-    } catch (error) {
-        return makeResponse(500, {error: "Network error"});
+export async function POST(request: NextRequest) {
+    const data = await request.json() as AuthorizationData;
+    const { email, password } = data;
+
+    const user = await User.get(email);
+
+    if (!user) {
+        return NextResponse.json({ error: 'Incorrect login' }, { status: 500 });
     }
+
+    if (!await user.checkPassword(password)) {
+        return NextResponse.json({ error: 'Incorrect password' }, { status: 500 });
+    }
+
+    if (!user.veryfied) {
+        return NextResponse.json({ error: 'User is not veryfied' }, { status: 500 });
+    }
+
+    const session: Session = {
+        email: user.email,
+        passwordEncoded: await user.passwordEncoded,
+    }
+
+    if (!setSessionToCookie(session)) {
+        return NextResponse.json({ error: 'Session error. Try again later' }, { status: 500 });
+    }
+
+    return NextResponse.json(user, { status: 200 });
 }
