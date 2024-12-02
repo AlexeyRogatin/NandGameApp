@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import LevelCanvas from "./LevelCanvas";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import axios from "axios";
 import levels from "@/lib/schemeworks/levels";
 import { FailedTest, Scheme } from "@/lib/schemeworks/Components";
